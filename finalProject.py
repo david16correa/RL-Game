@@ -222,8 +222,8 @@ class Game:
 
         # Add a text box to the right of the plot
         axes.text(
-            1.05, 0.5,
-            f'Time:  {self.time}\n'+
+            0.02, 1.05,
+            f'Time:  {self.time}, '+
             f'Reward:  {self.walker.reward:.0f}',
             transform=axes.transAxes,
             fontsize=12,
@@ -362,3 +362,73 @@ def optimalPolicyGet(game, gamma = 0.5):
                 policyStable = False
 
     return policy, valueFunction
+
+# =============================================================================================
+# =============================================================================================
+# --------------------------- Reinforcement learning: visualization ---------------------------
+# =============================================================================================
+# =============================================================================================
+
+def valueFunctionArray(game,X,Y,pickedPackages,valueFunction,policy):
+    M = np.asarray([[None for x in X] for y in Y])
+    for idx, x in enumerate(X):
+        for idy, y in enumerate(Y):
+            positionId = (np.round(x)*game.maze.size + np.round(y)) * 2**len(pickedPackages)
+            cargoId = sum(2**Id for Id, picked in enumerate(pickedPackages) if picked)
+            gameId = int(positionId + cargoId)
+            M[idx,idy] = valueFunction[gameId]
+    return np.array(M, dtype=float)
+
+def policyArrays(game,X,Y,pickedPackages,valueFunction,policy):
+    U = np.asarray([[None for x in X] for y in Y])
+    V = np.asarray([[None for x in X] for y in Y])
+    for idx, x in enumerate(X):
+        for idy, y in enumerate(Y):
+            positionId = (x*game.maze.size + y) * 2**len(pickedPackages)
+            cargoId = sum(2**Id for Id, picked in enumerate(pickedPackages) if picked)
+            gameId = int(positionId + cargoId)
+            vec = directions[policy[gameId]]
+            U[idx,idy] = vec[0]
+            V[idx,idy] = vec[1]
+    return (np.array(U, dtype=float),np.array(V, dtype=float))
+
+def smoothArrayValues(ogM, order=1):
+    M = ogM.copy()
+    sizeX, sizeY = M.shape
+    for _ in range(order):
+        for idx in np.arange(1,sizeX-1):
+            for idy in np.arange(1,sizeY-1):
+                M[idx,idy] += M[idx,idy-1] + M[idx,idy+1] + M[idx-1,idy] + M[idx+1,idy]
+                M[idx,idy] /= 5
+
+    return M
+
+def RLplot(game,valueFunction,policy):
+    length = 100
+    x = np.asarray(np.linspace(-0.49, game.maze.size-0.51, num=length))
+    quiverX = np.asarray(range(game.maze.size))
+    quiverY = quiverX.copy()
+    y = x.copy()
+
+    vfM = valueFunctionArray(game,x,y,game.walker.pickedPackages,valueFunction,policy)
+    policyU, policyV = policyArrays(game,quiverX,quiverY,game.walker.pickedPackages,valueFunction,policy)
+
+    fig, axes = game.plot()
+    X, Y = np.meshgrid(x, y)
+    cmap = plt.get_cmap('cividis')
+    axes.pcolormesh(X, Y,
+        smoothArrayValues(vfM, order=5).transpose(),
+        cmap=cmap,#alpha = 0.85,
+        zorder=-1,
+    )
+    axes.quiver(
+        quiverX, quiverY,
+        policyU.transpose(), policyV.transpose(),
+        alpha=0.5
+        # scale = 30,
+    )
+    epsilon = 0.25
+    axes.set_xlim(0-epsilon, game.maze.size-1+epsilon)
+    axes.set_ylim(0-epsilon, game.maze.size-1+epsilon)
+
+    return fig, axes
