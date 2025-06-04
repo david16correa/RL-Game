@@ -306,7 +306,7 @@ def rewardFunction(game, action):
 # =============================================================================================
 # =============================================================================================
 
-def optimalPolicyGet(game, gamma = 0.5):
+def optimalPolicyGet(game, gamma = 0.5, policy = None, valueFunction=None, order=np.inf):
     # memoization - all possible states games
     gamesCache = [None] * stateSpaceSize(game)
     for x in range(game.maze.size):
@@ -319,16 +319,22 @@ def optimalPolicyGet(game, gamma = 0.5):
                 gamesCache[stateId(auxGame)] = auxGame
 
     # 0. initialization: value function and policy
-    policy = [random.choice(actions) for _ in range(stateSpaceSize(game))]
-    valueFunction = [0] * stateSpaceSize(game)
+    if policy==None:
+        policy = [random.choice(actions) for _ in range(stateSpaceSize(game))]
+    if valueFunction==None:
+        valueFunction = [0] * stateSpaceSize(game)
 
     # policy iteration scheme
+    it = 0 # used to truncate to desired order
     threshold = 1e-10
     policyStable = False
-    while not policyStable:
+    while not policyStable and it < order:
+        it+=1
         # 1. policy evaluation
         delta = 1
+        peIt = 0
         while delta>threshold:
+            peIt += 1
             delta = 0
             # loop over all states
             for sId, auxGame in enumerate(gamesCache):
@@ -344,6 +350,8 @@ def optimalPolicyGet(game, gamma = 0.5):
 
                 # delta is updated
                 delta = max(delta, abs(oldVf - valueFunction[sId]))
+        if order != np.inf:
+            print(f"policy evaluation iterations used until convergence (delta <= threshold): {peIt}")
 
         # 2. policy improvement
         policyStable = True
@@ -360,6 +368,10 @@ def optimalPolicyGet(game, gamma = 0.5):
 
             if policy[sId] != oldAction:
                 policyStable = False
+
+    # if the user requested some number of iterations, they're notified when stability has been reached
+    if policyStable and it >= order:
+        print("policy stability achieved!")
 
     return policy, valueFunction
 
@@ -392,14 +404,16 @@ def policyArrays(game,X,Y,pickedPackages,valueFunction,policy):
             V[idx,idy] = vec[1]
     return (np.array(U, dtype=float),np.array(V, dtype=float))
 
-def smoothArrayValues(ogM, order=1):
+# a moving averages routine is used to blur the an image
+def blur(ogM, order=1):
     M = ogM.copy()
     sizeX, sizeY = M.shape
     for _ in range(order):
         for idx in np.arange(1,sizeX-1):
             for idy in np.arange(1,sizeY-1):
-                M[idx,idy] += M[idx,idy-1] + M[idx,idy+1] + M[idx-1,idy] + M[idx+1,idy]
-                M[idx,idy] /= 5
+                M[idx,idy] += M[idx,idy+1] + M[idx,idy-1] + M[idx-1,idy] + M[idx+1,idy]
+                M[idx,idy] += M[idx+1,idy+1] + M[idx+1,idy-1] + M[idx-1,idy+1] + M[idx-1,idy-1]
+                M[idx,idy] /= 9
 
     return M
 
@@ -417,7 +431,7 @@ def RLplot(game,valueFunction,policy):
     X, Y = np.meshgrid(x, y)
     cmap = plt.get_cmap('cividis')
     axes.pcolormesh(X, Y,
-        smoothArrayValues(vfM, order=5).transpose(),
+        blur(vfM, order=5).transpose(),
         cmap=cmap,#alpha = 0.85,
         zorder=-1,
     )
