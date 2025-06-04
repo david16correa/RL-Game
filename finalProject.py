@@ -60,30 +60,29 @@ class Maze:
         self.size = size
         self.plan = np.asarray([[i * size + j + 1 for j in range(size)] for i in range(size)])
 
-        # extremely rudimentary maze generator
+        # maze generator: hallways are randomly added, one by one, until all rooms are connected
         if hallways==None:
             hallways = []
             # for every room (node) in the maze, at least one hallway connecting it to a distinct room
-            # is chosen. The number of hallways must then be at least that of the number of rooms.
-            while len(hallways) < self.size**2:
-                for i in range(size):
-                    for j in range(size):
-                        # the original room is saved (twice)
-                        ogRoom = self.plan[i,j]
-                        targetRoom = ogRoom
-                        while ogRoom == targetRoom:
-                            # a random direction is chosen (up, down, left right) for the proposed hallway
-                            hallway = random.choice(list(directions.values()))
-                            # if the hallway leads outside the maze (out of bounds) it is brought back.
-                            # This might lead into the target room being equal to the original room. Hence
-                            # the while loop.
-                            Id = max(0, min(i+hallway[0], self.size-1))
-                            Jd = max(0, min(j+hallway[1], self.size-1))
-                            targetRoom = self.plan[Id, Jd]
-                        # once the hallway is chosen, it is saved to the list of hallways as an ordered tuple.
-                        # This ensures redundant hallways can be detected.
-                        hallways.append(tuple(np.sort([ogRoom, targetRoom])))
-                # the repeated hallways are eliminated
+            # is chosen. The number of hallways must then be at least enough to connect all rooms.
+            while not mazeIsGood(hallways, size):
+                # indices are used to choose a random room
+                i,j = random.choices(range(size), k = 2)
+                ogRoom = self.plan[i,j]
+                # a random neighboring room is chosen to form a hallway
+                targetRoom = ogRoom
+                while ogRoom == targetRoom:
+                    # a random direction is chosen (up, down, left right) for the proposed hallway
+                    hallway = random.choice(list(directions.values()))
+                    # if the hallway leads outside the maze (out of bounds) it is brought back.
+                    # This might lead into the target room being equal to the original room. Hence
+                    # the while loop.
+                    Id = max(0, min(i+hallway[0], self.size-1))
+                    Jd = max(0, min(j+hallway[1], self.size-1))
+                    targetRoom = self.plan[Id, Jd]
+                # once the hallway is chosen, it is saved to the list of hallways as an ordered tuple.
+                # This allows redundant hallways to be ignored.
+                hallways.append(tuple(np.sort([ogRoom, targetRoom])))
                 hallways = list(set(hallways))
 
             # once the hallways are chosen, they're saved
@@ -446,3 +445,34 @@ def RLplot(game,valueFunction,policy):
     axes.set_ylim(0-epsilon, game.maze.size-1+epsilon)
 
     return fig, axes
+
+
+# =============================================================================================
+# =============================================================================================
+# ---------------------------------- miscellaneous functions ----------------------------------
+# =============================================================================================
+# =============================================================================================
+
+# a maze is good if all nodes are connected
+def mazeIsGood(hallways, sideLength):
+    # a spanning tree will be used; sets are used to avoid duplicates
+    tree = {1}
+
+    while True:
+        # all neighbors to the positions contained in the tree are appended to the tree
+        auxTree = list(tree)
+        oldLength = len(tree)
+        for pair in hallways:
+            for leaf in tree:
+                if (leaf in pair):
+                    auxTree.append(int(pair[0]))
+                    auxTree.append(int(pair[1]))
+        tree = set(auxTree)
+
+        # if the tree did not grow, it will no longer grow.
+        if oldLength == len(tree):
+            break
+
+    # if the size of the tree is equal to the total number of nodes in the maze, then
+    # it is connected
+    return len(tree) == sideLength**2
