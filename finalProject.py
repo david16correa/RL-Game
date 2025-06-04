@@ -426,11 +426,20 @@ def RLplot(game,valueFunction,policy):
     vfM = valueFunctionArray(game,x,y,game.walker.pickedPackages,valueFunction,policy)
     policyU, policyV = policyArrays(game,quiverX,quiverY,game.walker.pickedPackages,valueFunction,policy)
 
+    filtered = vfM[vfM != 0] # since the value function at the goal is defined as zero, zero is often an annoying outlier
+    if len(filtered) != 0:
+        vmin = filtered.min()
+        vmax = filtered.max()
+    else:
+        vmin = 0
+        vmax = 0
+
     fig, axes = game.plot()
     X, Y = np.meshgrid(x, y)
     cmap = plt.get_cmap('cividis')
     axes.pcolormesh(X, Y,
         blur(vfM, order=5).transpose(),
+        vmin = vmin, vmax = vmax,
         cmap=cmap,#alpha = 0.85,
         zorder=-1,
     )
